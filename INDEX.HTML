@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Student Portal: Auth & GPA (Persistent)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // Combined Tailwind Configuration
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        // Auth colors
+                        'primary': '#4f46e5', /* Indigo */
+                        'primary-dark': '#4338ca',
+                        'accent': '#10b981', /* Emerald */
+                        'warning': '#f87171', /* Red */
+                        // GPA Calculator colors
+                        'calculator-primary': '#1e40af', // Blue-700
+                        'calculator-light': '#3b82f6', // Blue-500
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Shared Custom styles */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* Light gray background */
+            transition: background-color 0.3s;
+        }
+        /* Auth Card specific styles */
+        .auth-card {
+            background-color: white;
+            padding: 2.5rem;
+            border-radius: 1rem;
+            box-shadow: 0 15px 30px -5px rgba(0, 0, 0, 0.1);
+            max-width: 440px;
+            width: 95%;
+            transition: all 0.3s ease-in-out;
+        }
+        .input-field {
+            padding: 0.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            width: 100%;
+            transition: all 0.2s;
+        }
+        .input-field:focus {
+            border-color: #4f46e5;
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
+        }
+        .btn-primary {
+            background-color: #4f46e5;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            transition: background-color 0.2s, transform 0.1s;
+        }
+        .btn-primary:hover {
+            background-color: #4338ca;
+        }
+        .btn-primary:active {
+            transform: scale(0.99);
+        }
+        
+        /* GPA Calculator specific styles for scrolling */
+        .scrollbar-custom::-webkit-scrollbar { width: 8px; }
+        .scrollbar-custom::-webkit-scrollbar-track { background: #e5e7eb; }
+        .scrollbar-custom::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
+        .scrollbar-custom::-webkit-scrollbar-thumb:hover { background: #64748b; }
+        .grade-input:focus { outline: none; box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.5); }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+
+    <div id="auth-container" class="auth-card space-y-6">
+        
+        <h1 id="auth-header" class="text-3xl font-bold text-center text-primary transition duration-300">User Login</h1>
+
+        <div id="message-box" class="p-3 rounded-lg font-medium hidden text-sm" role="alert"></div>
+
+        <form id="login-form" class="space-y-4">
+            <div>
+                <label for="login-email" class="block text-sm font-medium text-gray-700">Email Address</label>
+                <input type="email" id="login-email" class="input-field mt-1" required placeholder="name@example.com" value="user@test.com">
+            </div>
+            <div>
+                <label for="login-password" class="block text-sm font-medium text-gray-700">Password</label>
+                <input type="password" id="login-password" class="input-field mt-1" required placeholder="securepassword" value="securepassword">
+            </div>
+            <button type="submit" class="btn-primary w-full">Log In</button>
+            <p class="text-center text-sm mt-4 text-gray-600">
+                Don't have an account?
+                <button type="button" onclick="switchView('register')" class="text-primary hover:text-primary-dark font-semibold transition">Create Account</button>
+            </p>
+        </form>
+
+        <form id="register-form" class="space-y-4" style="display: none;">
+            <div>
+                <label for="register-email" class="block text-sm font-medium text-gray-700">Email Address</label>
+                <input type="email" id="register-email" class="input-field mt-1" required placeholder="name@example.com">
+            </div>
+            <div>
+                <label for="register-password" class="block text-sm font-medium text-gray-700">Password</label>
+                <input type="password" id="register-password" class="input-field mt-1" required minlength="6" placeholder="Must be at least 6 characters">
+            </div>
+            <div>
+                <label for="register-confirm-password" class="block text-sm font-medium text-gray-700">Confirm Password</label>
+                <input type="password" id="register-confirm-password" class="input-field mt-1" required placeholder="Retype your password">
+            </div>
+            <button type="submit" class="btn-primary w-full">Sign Up & Log In</button>
+            <p class="text-center text-sm mt-4 text-gray-600">
+                Already have an account?
+                <button type="button" onclick="switchView('login')" class="text-primary hover:text-primary-dark font-semibold transition">Log In</button>
+            </p>
+        </form>
+        
+        <form id="otp-form" class="space-y-6" style="display: none;">
+            <div class="text-center">
+                <p class="text-sm text-gray-600">Verification is being skipped for direct access.</p>
+            </div>
+        </form>
+    </div>
+
+
+    <div id="gpa-calculator-container" class="hidden w-full max-w-4xl">
+        <header class="text-center mb-10">
+            <h1 class="text-5xl font-extrabold text-calculator-primary mb-2">
+                GPA Result Calculator
+            </h1>
+            <p class="text-xl text-slate-600">Calculate your semester grade point average.
+                <button onclick="logoutUser()" class="ml-4 text-warning hover:text-red-700 font-medium transition">
+                    (Log Out)
+                </button>
+            </p>
+        </header>
+
+        <div class="bg-white p-6 sm:p-8 rounded-3xl shadow-2xl border border-calculator-primary/10">
+            
+            <div class="text-center p-6 mb-8 bg-blue-50 border-2 border-calculator-light rounded-2xl shadow-inner transition duration-500">
+                <p class="text-xl font-bold text-slate-700 mb-1">Your Current GPA</p>
+                <div class="text-7xl font-extrabold text-calculator-primary leading-none tracking-tight">
+                    <span id="gpa-result">0.000</span>
+                </div>
+                <p id="gpa-message" class="text-lg font-semibold text-slate-500 mt-3"></p>
+                <p class="text-sm text-slate-500 mt-2">Courses Entered: <span id="courses-count" class="font-bold">0</span></p>
+            </div>
+            
+            <h2 class="text-2xl font-bold text-slate-800 mb-5 flex items-center border-b pb-3 border-slate-200">
+                Enter Course Details
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 ml-2 text-calculator-light" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+            </h2>
+
+            <div id="course-inputs" class="max-h-[500px] overflow-y-auto scrollbar-custom pb-4">
+                </div>
+
+            <div class="mt-6">
+                <button onclick="addCourseRow()" class="w-full flex items-center justify-center py-3 px-6 border border-transparent text-lg font-medium rounded-xl text-calculator-primary bg-blue-100 hover:bg-blue-200 shadow-lg transition duration-150 transform hover:scale-[1.01]">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    Add Course Row
+                </button>
+            </div>
+            
+            <div class="mt-8 pt-6 border-t border-slate-200">
+                <h3 class="text-xl font-bold text-slate-800 mb-3">5.0 Grading Scale</h3>
+                <div class="grid grid-cols-2 sm:grid-cols-5 gap-y-1 text-sm text-slate-600 font-medium">
+                    <p>A: 5.0</p><p>A-: 4.7</p><p>B+: 4.3</p><p>B: 4.0</p><p>B-: 3.7</p>
+                    <p>C+: 3.3</p><p>C: 3.0</p><p>C-: 2.7</p><p>D+: 2.3</p><p>D: 2.0</p>
+                    <p>F: 0.0</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        // --- AUTHENTICATION & VIEW MANAGEMENT LOGIC ---
+
+        // --- Persistent User Database (Loading from localStorage) ---
+        /** Loads user data from localStorage, or initializes with the test user if none is found. */
+        function loadUserDatabase() {
+            const storedData = localStorage.getItem('userDatabase');
+            if (storedData) {
+                try {
+                    return JSON.parse(storedData);
+                } catch (e) {
+                    console.error("Failed to parse userDatabase from localStorage", e);
+                    // Fallback to initial user if parsing fails
+                    return { "user@test.com": "securepassword" };
+                }
+            }
+            // Initial pre-populated test user if no data is stored
+            return { "user@test.com": "securepassword" };
+        }
+
+        /** Saves the current user database to localStorage. */
+        function saveUserDatabase(database) {
+            localStorage.setItem('userDatabase', JSON.stringify(database));
+        }
+        
+        // Initialize the database from storage on script load
+        const userDatabase = loadUserDatabase(); 
+
+        // REMOVED: currentOTP and pendingUserEmail are no longer needed
+        // let currentOTP = null; 
+        // let pendingUserEmail = null; 
+        
+        // Load the persistent logged-in state
+        let loggedInUserEmail = localStorage.getItem('loggedInUserEmail'); 
+
+        // --- DOM Elements ---
+        const authContainer = document.getElementById('auth-container');
+        const loginForm = document.getElementById('login-form');
+        const registerForm = document.getElementById('register-form');
+        const otpForm = document.getElementById('otp-form'); // Kept to avoid errors, but it's hidden
+        const gpaCalculatorContainer = document.getElementById('gpa-calculator-container');
+        const authHeader = document.getElementById('auth-header');
+        const messageBox = document.getElementById('message-box');
+        
+        // --- Utility Functions ---
+        
+        // REMOVED: generateOTP function
+        
+        /**
+         * Displays a temporary success or error message in the message box.
+         * @param {string} message The text to display.
+         * @param {string} type 'success' or 'error'.
+         */
+        function displayMessage(message, type) {
+            messageBox.textContent = message;
+            messageBox.classList.remove('hidden', 'bg-accent/20', 'text-accent', 'bg-warning/20', 'text-warning');
+
+            if (type === 'success') {
+                messageBox.classList.add('bg-accent/20', 'text-accent');
+            } else {
+                messageBox.classList.add('bg-warning/20', 'text-warning');
+            }
+
+            // Hide message after 5 seconds
+            setTimeout(() => {
+                messageBox.classList.add('hidden');
+            }, 5000);
+        }
+
+        /**
+         * Switches the active application view.
+         * @param {string} view 'login', 'register', 'otp', or 'gpa_calculator'.
+         */
+        window.switchView = function(view) {
+            // Reset main display styles
+            document.body.className = 'flex items-center justify-center min-h-screen p-4';
+            document.body.classList.remove('bg-slate-100', 'font-sans', 'py-12', 'px-4', 'sm:px-6', 'lg:px-8');
+
+            // Hide all major views
+            loginForm.style.display = 'none';
+            registerForm.style.display = 'none';
+            otpForm.style.display = 'none';
+            gpaCalculatorContainer.classList.add('hidden');
+            authContainer.classList.remove('hidden'); // Show card by default for auth views
+            messageBox.classList.add('hidden'); // Clear messages on view switch
+
+            if (view === 'login') {
+                authHeader.textContent = 'User Login';
+                loginForm.style.display = 'block';
+            } else if (view === 'register') {
+                authHeader.textContent = 'Create Account';
+                registerForm.style.display = 'block';
+            } else if (view === 'otp') {
+                // OTP view is now unused, but we keep the switch for flow consistency if needed elsewhere
+                authHeader.textContent = 'Verify Account (Skipped)';
+                // otpForm.style.display = 'block'; // Do not show the form
+            } else if (view === 'gpa_calculator') {
+                // PERSISTENCE CHANGE: Ensure loggedInUserEmail is set before switching
+                if (!loggedInUserEmail) {
+                    // This is a safeguard, should not happen if called correctly
+                    console.warn("Attempted to switch to GPA view without loggedInUserEmail.");
+                    return switchView('login');
+                }
+                
+                // Switch to the wider GPA calculator layout
+                authContainer.classList.add('hidden'); 
+                gpaCalculatorContainer.classList.remove('hidden'); 
+                
+                // Set body styles for the calculator view
+                document.body.className = 'bg-slate-100 font-sans min-h-screen flex justify-center py-12 px-4 sm:px-6 lg:px-8';
+                
+                // Initialize GPA calculator UI
+                initializeGpaCalculator(loggedInUserEmail);
+            }
+        };
+
+        /** Logs the user out and returns to the login screen. */
+        window.logoutUser = function() {
+            loggedInUserEmail = null;
+            localStorage.removeItem('loggedInUserEmail'); // CRITICAL: Clear session in localStorage
+            displayMessage('You have been logged out successfully.', 'success');
+            // Reset the pre-filled values in login form
+            document.getElementById('login-email').value = ''; 
+            document.getElementById('login-password').value = '';
+            switchView('login');
+        }
+
+        // --- Event Handlers ---
+
+        loginForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value.trim();
+            const password = document.getElementById('login-password').value;
+
+            if (!userDatabase.hasOwnProperty(email)) {
+                displayMessage('Login failed: Account not found.', 'error');
+                return;
+            }
+
+            if (userDatabase[email] === password) {
+                loggedInUserEmail = email;
+                localStorage.setItem('loggedInUserEmail', email); // CRITICAL: Set session in localStorage
+                displayMessage(`Welcome back, ${email}! Loading GPA tool.`, 'success');
+                switchView('gpa_calculator');
+            } else {
+                displayMessage('Login failed: Invalid password.', 'error');
+            }
+        });
+
+        registerForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const email = document.getElementById('register-email').value.trim();
+            const password = document.getElementById('register-password').value;
+            const confirmPassword = document.getElementById('register-confirm-password').value;
+
+            if (password !== confirmPassword) {
+                displayMessage('Sign Up failed: Passwords do not match.', 'error');
+                return;
+            }
+            if (password.length < 6) {
+                displayMessage('Sign Up failed: Password must be at least 6 characters.', 'error');
+                return;
+            }
+
+            if (userDatabase.hasOwnProperty(email)) {
+                displayMessage('Sign Up failed: An account with this email already exists. Please log in.', 'error');
+                return;
+            }
+
+            // --- DIRECT REGISTRATION & LOGIN START ---
+            userDatabase[email] = password; // Store the new user's password
+            saveUserDatabase(userDatabase); // CRITICAL: Save the new user to localStorage
+
+            loggedInUserEmail = email;
+            localStorage.setItem('loggedInUserEmail', loggedInUserEmail); // CRITICAL: Set session in localStorage
+            
+            displayMessage('Registration successful! Logging you in directly. Loading GPA tool.', 'success');
+            registerForm.reset();
+            switchView('gpa_calculator');
+            // --- DIRECT REGISTRATION & LOGIN END ---
+        });
+
+        // REMOVED: otpForm.addEventListener is no longer needed
+        otpForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            displayMessage('OTP verification step is disabled in this version.', 'error');
+            switchView('login');
+        });
+
+
+        // --- GPA CALCULATION LOGIC ---
+
+        // Define the standard grading scale mapping letter grades to GPA points
+        // UPDATED: A=5.0 scale
+        const GRADES = {
+            'A': 5.0, 'A-': 4.7,
+            'B+': 4.3, 'B': 4.0, 'B-': 3.7,
+            'C+': 3.3, 'C': 3.0, 'C-': 2.7,
+            'D+': 2.3, 'D': 2.0,
+            'F': 0.0
+        };
+
+        // Create HTML options once for efficiency
+        const GRADE_OPTIONS = Object.keys(GRADES)
+            .map(grade => `<option value="${grade}" ${grade === 'A' ? 'selected' : ''}>${grade} (${GRADES[grade].toFixed(1)})</option>`)
+            .join('');
+        
+        let courseCounter = 0;
+
+        /** Initializes the GPA calculator state and UI when the user is authenticated. */
+        function initializeGpaCalculator(email) {
+            // The console will show the logged-in user email
+            console.log(`Authenticated user: ${email}. Initializing GPA Calculator.`);
+
+            // Resetting course rows and re-adding defaults
+            const container = document.getElementById('course-inputs');
+            container.innerHTML = '';
+            courseCounter = 0;
+
+            // Add initial 3 course rows to get started
+            for (let i = 0; i < 3; i++) {
+                addCourseRow(true);
+            }
+            
+            // Re-attach listeners to all existing inputs (for initial load)
+            const allInputs = document.querySelectorAll('.course-row input, .course-row select');
+            allInputs.forEach(input => input.addEventListener('input', calculateGPA));
+
+            // Initial calculation
+            calculateGPA();
+        }
+
+
+        /**
+         * Converts a letter grade string to its corresponding GPA value.
+         * @param {string} grade - The letter grade (e.g., 'A', 'B+').
+         * @returns {number} The numeric GPA value.
+         */
+        function getGpaValue(grade) {
+            return GRADES[grade] || 0.0;
+        }
+
+        /**
+         * Creates a single HTML row for a course input.
+         * @param {number} id - The unique ID for the course row.
+         * @returns {string} The HTML string for the course row.
+         */
+        function createCourseRowHtml(id) {
+            // Updated credit value to be blank on new rows for better user input experience
+            const initialCredits = (id <= 3) ? "3.0" : ""; 
+
+            return `
+                <div id="course-row-${id}" class="course-row p-4 bg-white/70 border border-slate-200 rounded-xl shadow-md grid grid-cols-1 md:grid-cols-4 gap-4 items-end mb-4 transition-all duration-300">
+                    <div class="md:col-span-2">
+                        <label for="course-name-${id}" class="block text-sm font-medium text-slate-700 mb-1">Course Name</label>
+                        <input type="text" id="course-name-${id}" placeholder="e.g., Data Structures" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-calculator-light focus:border-calculator-light transition duration-150">
+                    </div>
+                    
+                    <div>
+                        <label for="course-credits-${id}" class="block text-sm font-medium text-slate-700 mb-1">Credits/Units</label>
+                        <input type="number" id="course-credits-${id}" min="0.5" step="0.5" value="${initialCredits}" required class="w-full p-2 border border-slate-300 rounded-lg text-center focus:ring-calculator-light focus:border-calculator-light transition duration-150">
+                    </div>
+
+                    <div class="flex items-center space-x-2">
+                        <div class="flex-grow">
+                            <label for="course-grade-${id}" class="block text-sm font-medium text-slate-700 mb-1">Letter Grade</label>
+                            <select id="course-grade-${id}" required class="w-full p-2 border border-slate-300 rounded-lg bg-white appearance-none focus:ring-calculator-light focus:border-calculator-light transition duration-150">
+                                ${GRADE_OPTIONS}
+                            </select>
+                        </div>
+                        
+                        <button type="button" onclick="removeCourseRow(${id})" class="p-2 h-10 w-10 mt-6 md:mt-0 md:mb-0 text-white bg-red-500 hover:bg-red-600 rounded-full shadow-lg transition duration-150 transform hover:scale-105" aria-label="Remove course">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M20 12H4" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        /**
+         * Adds a new course input row to the container and attaches listeners.
+         * @param {boolean} initialLoad - True if called during initial setup.
+         */
+        window.addCourseRow = function(initialLoad = false) {
+            courseCounter++;
+            const container = document.getElementById('course-inputs');
+            const newRowHtml = createCourseRowHtml(courseCounter);
+            
+            container.insertAdjacentHTML('beforeend', newRowHtml);
+            
+            if (!initialLoad) {
+                // Scroll to the new row only after user action
+                document.getElementById(`course-row-${courseCounter}`).scrollIntoView({ behavior: 'smooth', block: 'end' });
+            }
+
+            // Attach listeners to the new inputs for real-time calculation
+            const inputs = document.querySelectorAll(`#course-row-${courseCounter} input, #course-row-${courseCounter} select`);
+            inputs.forEach(input => input.addEventListener('input', calculateGPA));
+            calculateGPA();
+        }
+
+        /**
+         * Removes a course input row by its ID with a fade-out animation.
+         * @param {number} id - The ID of the row to remove.
+         */
+        window.removeCourseRow = function(id) {
+            const row = document.getElementById(`course-row-${id}`);
+            if (row) {
+                // Apply transition classes
+                row.classList.add('opacity-0', 'scale-95');
+                // Use a minimal height/margin to collapse smoothly
+                row.style.maxHeight = '0';
+                row.style.marginBottom = '0';
+                row.style.paddingTop = '0';
+                row.style.paddingBottom = '0';
+
+                setTimeout(() => {
+                    row.remove();
+                    calculateGPA();
+                }, 300); // Wait for transition to finish
+            }
+        }
+
+        /**
+         * Calculates the overall GPA and updates the UI.
+         */
+        function calculateGPA() {
+            const rows = document.querySelectorAll('.course-row');
+            let totalQualityPoints = 0;
+            let totalCredits = 0;
+            let totalCourses = 0;
+
+            rows.forEach(row => {
+                try {
+                    const creditsInput = row.querySelector('[id^="course-credits-"]');
+                    const gradeSelect = row.querySelector('[id^="course-grade-"]');
+
+                    if (!creditsInput || !gradeSelect) return;
+
+                    // Use parseFloat to handle numeric credits input, defaulting to 0 for invalid/empty
+                    const credits = parseFloat(creditsInput.value) || 0; 
+                    const grade = gradeSelect.value;
+                    const gpaValue = getGpaValue(grade);
+
+                    if (credits <= 0) {
+                        return; // Ignore courses with zero or negative credits
+                    }
+
+                    const qualityPoints = credits * gpaValue;
+
+                    totalQualityPoints += qualityPoints;
+                    totalCredits += credits;
+                    totalCourses++;
+
+                } catch (error) {
+                    console.error("Error processing a course row:", error);
+                }
+            });
+
+            const resultElement = document.getElementById('gpa-result');
+            const coursesCountElement = document.getElementById('courses-count');
+            
+            coursesCountElement.textContent = totalCourses;
+
+            if (totalCredits > 0) {
+                const gpa = totalQualityPoints / totalCredits;
+                resultElement.textContent = gpa.toFixed(3);
+                
+                let message = "Outstanding! Keep up the excellent performance.";
+                let colorClass = 'text-green-700';
+
+                // Adjusted messages for a 5.0 scale
+                if (gpa < 3.0) { // Equivalent to C+ or lower
+                    message = "Needs improvement. Focus on your weaker subjects.";
+                    colorClass = 'text-red-600';
+                } else if (gpa < 4.0) { // Equivalent to B or lower
+                    message = "Solid effort. Aiming for the B+ range next semester!";
+                    colorClass = 'text-yellow-600';
+                } else if (gpa < 4.7) { // Equivalent to A- or lower
+                    message = "Great job! You're performing very well.";
+                    colorClass = 'text-calculator-light';
+                }
+                
+                document.getElementById('gpa-message').textContent = message;
+                document.getElementById('gpa-message').className = `text-lg font-semibold ${colorClass}`;
+
+            } else {
+                resultElement.textContent = '0.000';
+                document.getElementById('gpa-message').textContent = "Start by adding your course credits and grades.";
+                document.getElementById('gpa-message').className = 'text-lg font-medium text-slate-500';
+            }
+        }
+
+        // Initialize view to login on load
+        document.addEventListener('DOMContentLoaded', () => {
+            // CRITICAL: Check for existing session on page load
+            if (loggedInUserEmail) {
+                console.log(`Persistent session found for: ${loggedInUserEmail}`);
+                switchView('gpa_calculator'); // Go straight to GPA calculator
+            } else {
+                switchView('login'); // No session, go to login
+            }
+        });
+    </script>
+</body>
+</html>
